@@ -303,7 +303,20 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
   overflow: hidden;
 }
 
-.rows li + li { border-top: 1px solid var(--hairline); }
+/* 明细行之间用内缩的细线，像 iOS 列表的分隔线 */
+.rows li + li {
+  position: relative;
+  border-top: 0;
+}
+.rows li + li::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 12px;
+  right: 12px;
+  height: 1px;
+  background: var(--hairline);
+}
 
 .row {
   width: 100%;
@@ -1176,4 +1189,102 @@ select:focus-visible {
   .splash-name,
   .splash-version,
   .summary-number b.bump { animation: none; }
+}
+
+/* ——— iOS 风格全局润色 ——— */
+
+/* 页面顶部一层很淡的绿色光晕，带出层次 */
+.page {
+  background:
+    radial-gradient(120% 55% at 50% -8%, rgba(46, 107, 79, 0.07), transparent 62%);
+}
+@media (prefers-color-scheme: dark) {
+  .page {
+    background:
+      radial-gradient(120% 55% at 50% -8%, rgba(124, 196, 160, 0.08), transparent 62%);
+  }
+}
+
+/* 顶部导航栏：半透明 + 毛玻璃，滚动时压在内容上面 */
+.projecttop {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  margin: 0 -16px 12px;
+  padding: 6px 16px 10px;
+  background: color-mix(in srgb, var(--paper) 86%, transparent);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+.projecttop::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--hairline);
+}
+
+/* 弹层顶部的小横条 + 背景毛玻璃 */
+.sheet-grabber {
+  width: 36px;
+  height: 5px;
+  margin: 4px auto 6px;
+  border-radius: 999px;
+  background: var(--fill);
+}
+.sheet-bar {
+  background: color-mix(in srgb, var(--paper) 86%, transparent);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid var(--hairline);
+}
+.sheet-backdrop.shown {
+  background: rgba(10, 14, 11, 0.32);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+}
+
+/* 卡片：更轻的投影，按下时微微缩一下 */
+.summary {
+  box-shadow: 0 14px 30px -20px rgba(20, 60, 44, 0.65);
+}
+.summary.card.openable {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.summary.card.openable:active {
+  transform: scale(0.994);
+  box-shadow: 0 8px 20px -18px rgba(20, 60, 44, 0.6);
+}
+
+/* 底部“记一笔”：加一点内高光，像浮起来的玻璃按钮 */
+.add {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 14px 30px -12px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+/* 空状态：图标放在浅绿圆底里 */
+.empty-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  font-size: 30px;
+  opacity: 1;
+}
+
+/* 首页 / 项目页切换时轻轻淡入 */
+.view { animation: view-in 0.22s ease both; }
+@keyframes view-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .view { animation: none; }
 }
