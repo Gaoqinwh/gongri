@@ -1,6 +1,8 @@
 import {jsxs as _jsxs, Fragment as _Fragment, jsx as _jsx} from "react/jsx-runtime";import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildWorkDocx, saveDocx, saveFile, safeFileName } from './docx.js';
 
+const APP_VERSION = '1.0.0';
+
 const KEY = 'gongri.v1';
 const PROJECTS_KEY = 'gongri.projects.v1';
 const ACTIVE_KEY = 'gongri.active.v1';
@@ -257,6 +259,7 @@ export default function App() {
   const [editingProject, setEditingProject] = useState(null);
   const [menuProject, setMenuProject] = useState(null);
   const [exporting, setExporting] = useState(false);
+  const [booting, setBooting] = useState(true);
   const importRef = useRef(null);
 
   useEffect(() => {
@@ -819,6 +822,8 @@ export default function App() {
         hidden: true,
         onChange: importData,}
       )
+
+      , booting && _jsx(Splash, { version: APP_VERSION, onDone: () => setBooting(false),} )
     ]})
   );
 }
@@ -861,6 +866,62 @@ function HomeSummary({ projects, records, yearStart, yearEnd }) {
           totalPaid
         )}`
       })
+    ]})
+  );
+}
+
+/// 数字变化时从当前值缓动到目标值，用来做余额的滚动动画。
+function useAnimatedNumber(target, duration = 620) {
+  const [display, setDisplay] = useState(target);
+  const current = useRef(target);
+
+  useEffect(() => {
+    const from = current.current;
+    if (from === target) return;
+    const start = performance.now();
+    let raf = 0;
+    const tick = (now) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      const next = from + (target - from) * eased;
+      current.current = next;
+      setDisplay(next);
+      if (t < 1) {
+        raf = requestAnimationFrame(tick);
+      } else {
+        current.current = target;
+        setDisplay(target);
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+
+  return display;
+}
+
+/// 开屏：图标、名称、版本，约 1.5 秒后淡出到首页。
+function Splash({ version, onDone }) {
+  const [leaving, setLeaving] = useState(false);
+
+  useEffect(() => {
+    const fade = setTimeout(() => setLeaving(true), 1150);
+    const done = setTimeout(onDone, 1500);
+    return () => {
+      clearTimeout(fade);
+      clearTimeout(done);
+    };
+  }, [onDone]);
+
+  return (
+    _jsxs('div', {
+      className: `splash${leaving ? ' leaving' : ''}`,
+      onClick: onDone,
+      role: "presentation",
+ children: [
+      _jsx('span', { className: "splash-mark", 'aria-hidden': "true", children: "📒"})
+      , _jsx('p', { className: "splash-name", children: "记工"})
+      , _jsx('p', { className: "splash-version", children: `v${version}`})
     ]})
   );
 }
@@ -935,8 +996,22 @@ function ProjectCard({ project, records, onOpen, onEdit, onMenu }) {
   const allHours = own.reduce((sum, record) => sum + overtimeHours(record.overtime), 0);
   const balance = round2(allWage - allPaid);
   // 余额为负时不再显示「多付工资」，改为显示这段时间的支账（已发）总额。
-  const displayText = moneyFmt.format(balance >= 0 ? Math.abs(balance) : Math.abs(allPaid));
-  const displaySize = Math.min(60, Math.floor(535 / Math.max(displayText.length, 1)));
+  const targetBalance = balance >= 0 ? Math.abs(balance) : Math.abs(allPaid);
+  const animatedBalance = useAnimatedNumber(targetBalance);
+  const displayText = moneyFmt.format(animatedBalance);
+  const targetText = moneyFmt.format(targetBalance);
+  const displaySize = Math.min(60, Math.floor(535 / Math.max(targetText.length, 1)));
+
+  // 余额变化时给数字一个轻微的「弹一下」，配合滚动。
+  const [bump, setBump] = useState(false);
+  const lastTarget = useRef(targetBalance);
+  useEffect(() => {
+    if (lastTarget.current === targetBalance) return;
+    lastTarget.current = targetBalance;
+    setBump(true);
+    const timer = setTimeout(() => setBump(false), 480);
+    return () => clearTimeout(timer);
+  }, [targetBalance]);
 
   return (
     _jsxs('article', {
@@ -985,7 +1060,7 @@ function ProjectCard({ project, records, onOpen, onEdit, onMenu }) {
 
       , _jsx('p', { className: "summary-label", children: balance >= 0 ? '应得工资余额' : '支账'})
       , _jsx('div', { className: "summary-number", children: 
-        _jsxs('b', { style: { fontSize: `min(14vw, ${displaySize}px)` }, children: [
+        _jsxs('b', { className: bump ? 'bump' : '', style: { fontSize: `min(14vw, ${displaySize}px)` }, children: [
           _jsx('span', { className: "cur", children: "¥"})
           , displayText
           , _jsx('span', { className: "unit", children: "元"})
