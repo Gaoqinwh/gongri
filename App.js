@@ -316,7 +316,8 @@ export default function App() {
       if (!last) continue;
       if (!best || last > best.date) best = { id: project.id, date: last };
     }
-    if (!best) return null;
+    // 一条上工记录都还没有时，先按当前打开的项目算在职。
+    if (!best) return activeId;
     const gap = (fromISO(today) - fromISO(best.date)) / 86400000;
     return gap <= 30 ? best.id : null;
   }, [projects, records]);
