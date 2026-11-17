@@ -2232,7 +2232,7 @@ function BatchSheet({ projectId, projectName, defaultStart, defaultEnd, records,
           , _jsxs('div', { className: "field", children: [
             _jsx('span', { className: "field-label", children: "默认"})
             , _jsxs('span', { className: "choices", children: [
-              _jsx('button', { type: "button", className: fill === 'work' ? 'on' : '', onClick: () => setFill('work'), children: "上班 1 工"  })
+              _jsx('button', { type: "button", className: fill === 'work' ? 'on' : '', onClick: () => setFill('work'), children: "上班"  })
               , _jsx('button', { type: "button", className: fill === 'half' ? 'on' : '', onClick: () => setFill('half'), children: "半工"})
               , _jsx('button', { type: "button", className: fill === 'rest' ? 'on' : '', onClick: () => setFill('rest'), children: "休息"})
             ]})
