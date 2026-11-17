@@ -432,12 +432,19 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
   line-height: 1.5;
 }
 
-/* 记一笔：固定在底部，拇指够得到。 */
-.add {
+/* 记一笔 + 补记：固定在底部，拇指够得到。 */
+.bottombar {
   position: fixed;
   left: 50%;
   bottom: calc(18px + env(safe-area-inset-bottom));
   transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.add {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1246,6 +1253,53 @@ select:focus-visible {
 .summary.card.openable {
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
+.project-state {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+}
+.project-state.on {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: transparent;
+  color: #ffffff;
+}
+.project-state.corner {
+  position: absolute;
+  top: 16px;
+  right: 18px;
+}
+.project-block { padding-right: 66px; }
+
+/* 本月统计卡右上角的补记 */
+.board-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.board-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.board-action svg { width: 14px; height: 14px; }
+.board-action:active { background: var(--fill); }
+
 .summary.card.openable:active {
   transform: scale(0.994);
   box-shadow: 0 8px 20px -18px rgba(20, 60, 44, 0.6);
@@ -1281,3 +1335,129 @@ select:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .view { animation: none; }
 }
+
+/* 首页「今天」 */
+.todaycard {
+  margin-bottom: 12px;
+  padding: 14px 16px 13px;
+  border-radius: 20px;
+  background: var(--surface);
+}
+.today-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.today-date {
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.today-project {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  max-width: 62%;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+}
+.today-project-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.today-project svg {
+  flex: none;
+  width: 12px;
+  height: 12px;
+}
+.today-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.today-primary {
+  flex: 1;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+}
+.today-primary:active { opacity: 0.9; }
+.today-secondary {
+  height: 44px;
+  padding: 0 18px;
+  border-radius: 12px;
+  background: var(--fill);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+.today-more {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--fill);
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1;
+}
+.today-done {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px 13px;
+  border-radius: 12px;
+  background: var(--work-soft);
+  text-align: left;
+}
+.today-check {
+  flex: none;
+  color: var(--work);
+  font-size: 15px;
+  font-weight: 700;
+}
+.today-done-text {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.today-edit {
+  flex: none;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+}
+.today-gap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 10px 0 0;
+  color: var(--ot);
+  font-size: 12.5px;
+}
+.today-gap button {
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+/* 导出面板里的工资单入口 */
+
+
+/* 导出面板的「内容」多选：小一号，一行放得下 */
+.choices.compact { gap: 2px; padding: 2px; }
+.choices.compact button { height: 30px; padding: 0 5px; font-size: 12.5px; }
