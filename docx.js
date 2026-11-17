@@ -117,14 +117,29 @@ function table(widths, rows) {
 const TABLE_WIDTH = 9600;
 
 /// 一天的明细表：日期 / 状态 / 工日 / 加班 / 工资，加班时间和备注折成第二行。
-function rowsTable(rows) {
-  const widths = [2500, 1800, 1600, 1800, 1900];
-  const headers = ['日期', '状态', '工日', '加班', '工资'];
+function rowsTable(rows, fields = {}) {
+  const show = {
+    days: fields.days !== false,
+    overtime: fields.overtime !== false,
+    wage: fields.wage !== false,
+    note: fields.note !== false,
+  };
+  const all = [
+    { key: 'date', label: '日期', width: 2500 },
+    { key: 'status', label: '状态', width: 1800 },
+    { key: 'days', label: '工日', width: 1600 },
+    { key: 'overtime', label: '加班', width: 1800 },
+    { key: 'wage', label: '工资', width: 1900 },
+  ];
+  const cols = all.filter((col) => col.key === 'date' || col.key === 'status' || show[col.key]);
+  const totalBase = cols.reduce((sum, col) => sum + col.width, 0);
+  const widths = cols.map((col) => Math.round((col.width / totalBase) * TABLE_WIDTH));
+  const span = cols.length;
 
   const head = row(
-    headers.map((text, index) =>
+    cols.map((col, index) =>
       cell(
-        paragraph(run(text, { bold: true, size: 18, color: '1F3A2D' }), { align: 'center' }),
+        paragraph(run(col.label, { bold: true, size: 18, color: '1F3A2D' }), { align: 'center' }),
         widths[index],
         { fill: HEAD_FILL }
       )
@@ -137,40 +152,51 @@ function rowsTable(rows) {
     const isPayment = item.note === '发工资' || item.note === '生活费';
     const noteColor = isPayment ? PAY : INK;
 
-    body.push(
-      row([
-        cell(paragraph(run(item.date, { size: 18 }), { align: 'left' }), widths[0]),
-        cell(
-          paragraph(
-            run(item.status, {
-              size: 18,
-              bold: item.status === '上班',
-              color: item.status === '上班' ? GREEN : item.status === '离职' ? OT : MUTED,
-            }),
-            { align: 'center' }
-          ),
-          widths[1]
-        ),
-        cell(paragraph(run(item.days, { size: 18, bold: true }), { align: 'center' }), widths[2]),
-        cell(
-          paragraph(
-            item.hours
-              ? run(`${item.hours} 小时`, { size: 18, bold: true, color: OT })
-              : run('—', { size: 18, color: 'A8A8A8' }),
-            { align: 'center' }
-          ),
-          widths[3]
-        ),
-        cell(paragraph(run(item.wage, { size: 18, bold: true }), { align: 'right' }), widths[4]),
-      ])
-    );
+    const cells = [];
+    cols.forEach((col, index) => {
+      const width = widths[index];
+      if (col.key === 'date') {
+        cells.push(cell(paragraph(run(item.date, { size: 18 }), { align: 'left' }), width));
+      } else if (col.key === 'status') {
+        cells.push(
+          cell(
+            paragraph(
+              run(item.status, {
+                size: 18,
+                bold: item.status === '上班',
+                color: item.status === '上班' ? GREEN : item.status === '离职' ? OT : MUTED,
+              }),
+              { align: 'center' }
+            ),
+            width
+          )
+        );
+      } else if (col.key === 'days') {
+        cells.push(cell(paragraph(run(item.days, { size: 18, bold: true }), { align: 'center' }), width));
+      } else if (col.key === 'overtime') {
+        cells.push(
+          cell(
+            paragraph(
+              item.hours
+                ? run(`${item.hours} 小时`, { size: 18, bold: true, color: OT })
+                : run('—', { size: 18, color: 'A8A8A8' }),
+              { align: 'center' }
+            ),
+            width
+          )
+        );
+      } else if (col.key === 'wage') {
+        cells.push(cell(paragraph(run(item.wage, { size: 18, bold: true }), { align: 'right' }), width));
+      }
+    });
+    body.push(row(cells));
 
     const detail = [];
-    if (item.hours) {
+    if (item.hours && show.overtime) {
       detail.push(run('加班时间 ', { size: 16, color: MUTED }));
       detail.push(run(item.overtime, { size: 16, color: INK }));
     }
-    if (item.note !== '无') {
+    if (item.note !== '无' && show.note) {
       if (detail.length) detail.push(run('　·　', { size: 16, color: 'B8B8B8' }));
       // 收款那行只写「生活费 ¥X」，不加「备注」这类多余的词。
       if (!isPayment) detail.push(run('备注 ', { size: 16, color: MUTED }));
@@ -184,7 +210,7 @@ function rowsTable(rows) {
       body.push(
         row([
           cell(paragraph(detail, { align: 'left' }), TABLE_WIDTH, {
-            span: 5,
+            span,
             fill: DETAIL_FILL,
           }),
         ])
@@ -195,14 +221,16 @@ function rowsTable(rows) {
   const tableNote = row([
     cell(
       paragraph(
-        run('工资 = 工日 × 日薪 + 加班小时 × 加班时薪　·　工资余额 = 项目累计工资 − 项目累计支账　·　支账即生活费。', {
-          size: 15,
-          color: MUTED,
-        }),
+        run(
+          fields.wage !== false || fields.paid !== false
+            ? '工资 = 工日 × 日薪 + 加班小时 × 加班时薪　·　工资余额 = 项目累计工资 − 项目累计支账　·　支账即生活费。'
+            : '工日按 0.5 / 1 天记，加班按小时记，只统计工时。',
+          { size: 15, color: MUTED }
+        ),
         { align: 'left' }
       ),
       TABLE_WIDTH,
-      { span: 5, fill: 'FBFCFB' }
+      { span, fill: 'FBFCFB' }
     ),
   ]);
 
@@ -221,55 +249,68 @@ function pageBreak() {
 }
 
 /// 每个项目的「总结」：本期工日/加班/出勤、工资与支账、项目累计与余额。
-function summaryXml(section, periodWord) {
+function summaryXml(section, periodWord, fields = {}) {
   const month = section.month;
   const totals = section.totals;
+  const show = {
+    days: fields.days !== false,
+    overtime: fields.overtime !== false,
+    wage: fields.wage !== false,
+    paid: fields.paid !== false,
+  };
+  const headParts = [];
+  if (show.days) headParts.push(run(`${periodWord} ${month.days} 个工日`, { size: 19, bold: true }));
+  const tail = [];
+  if (show.overtime) tail.push(`加班 ${month.hours} 小时`);
+  tail.push(`上班 ${month.worked} 天 · 休息 ${month.rested} 天`);
+  if (month.leaves > 0) tail.push(`离职 ${month.leaves} 天`);
+  headParts.push(run(`${show.days ? ' · ' : ''}${tail.join(' · ')}`, { size: 19, color: INK }));
+
+  const moneyParts = [];
+  if (show.wage) {
+    moneyParts.push(run(`${periodWord}工资 `, { size: 20, color: MUTED }));
+    moneyParts.push(run(month.wage, { size: 20, bold: true }));
+  }
+  if (show.paid) {
+    moneyParts.push(run(`${moneyParts.length ? '　　' : ''}${periodWord}支账 `, { size: 20, color: MUTED }));
+    moneyParts.push(run(month.paid, { size: 20, bold: true }));
+  }
+
+  const totalParts = [];
+  if (show.wage) {
+    totalParts.push(run('项目累计工资 ', { size: 20, color: MUTED }));
+    totalParts.push(run(totals.wage, { size: 20, bold: true }));
+  }
+  if (show.paid) {
+    totalParts.push(run(`${totalParts.length ? '　　' : ''}累计支账 `, { size: 20, color: MUTED }));
+    totalParts.push(run(totals.paid, { size: 20, bold: true }));
+  }
+
   return (
     paragraph(run('总结', { bold: true, size: 27, color: '1F3A2D' }), {
       after: 90,
       keepNext: true,
     }) +
-    paragraph(
-      [
-        run(`${periodWord} ${month.days} 个工日`, { size: 19, bold: true }),
-        run(
-          ` · 加班 ${month.hours} 小时 · 上班 ${month.worked} 天 · 休息 ${month.rested} 天${
-            month.leaves > 0 ? ` · 离职 ${month.leaves} 天` : ''
-          }`,
-          { size: 19, color: INK }
-        ),
-      ],
-      { after: 70 }
-    ) +
-    paragraph(
-      [
-        run(`${periodWord}工资 `, { size: 20, color: MUTED }),
-        run(month.wage, { size: 20, bold: true }),
-        run(`　　${periodWord}支账 `, { size: 20, color: MUTED }),
-        run(month.paid, { size: 20, bold: true }),
-      ],
-      { after: 40 }
-    ) +
-    paragraph(
-      [
-        run('项目累计工资 ', { size: 20, color: MUTED }),
-        run(totals.wage, { size: 20, bold: true }),
-        run('　　累计支账 ', { size: 20, color: MUTED }),
-        run(totals.paid, { size: 20, bold: true }),
-      ],
-      { after: 110 }
-    ) +
-    paragraph(
-      [
-        run(`${totals.balanceLabel} `, { size: 24, bold: true, color: '1F3A2D' }),
-        run(totals.balance, {
-          size: 30,
-          bold: true,
-          color: totals.negative ? OT : GREEN,
-        }),
-      ],
-      { shade: BALANCE_FILL, indent: 120, before: 60, after: 140 }
-    )
+    paragraph(headParts, { after: 70 }) +
+    (moneyParts.length
+      ? paragraph(moneyParts, { after: 40 })
+      : '') +
+    (totalParts.length
+      ? paragraph(totalParts, { after: 110 })
+      : '') +
+    (fields.balance !== false
+      ? paragraph(
+          [
+            run(`${totals.balanceLabel} `, { size: 24, bold: true, color: '1F3A2D' }),
+            run(totals.balance, {
+              size: 30,
+              bold: true,
+              color: totals.negative ? OT : GREEN,
+            }),
+          ],
+          { shade: BALANCE_FILL, indent: 120, before: 60, after: 140 }
+        )
+      : '')
   );
 }
 
@@ -288,38 +329,47 @@ function sectionHead(section) {
 }
 
 /// 多项目导出最后的合计：这段时间的和、项目累计的，都列出来。
-function grandXml(grand, count, periodWord) {
+function grandXml(grand, count, periodWord, fields = {}) {
+  const show = {
+    wage: fields.wage !== false,
+    paid: fields.paid !== false,
+  };
+  const periodParts = [];
+  if (show.wage) {
+    periodParts.push(run(`${periodWord}工资 `, { size: 20, color: MUTED }));
+    periodParts.push(run(grand.periodWage, { size: 20, bold: true }));
+  }
+  if (show.paid) {
+    periodParts.push(run(`${periodParts.length ? '　　' : ''}${periodWord}支账 `, { size: 20, color: MUTED }));
+    periodParts.push(run(grand.periodPaid, { size: 20, bold: true }));
+  }
+  const totalParts = [];
+  if (show.wage) {
+    totalParts.push(run('项目累计工资 ', { size: 20, color: MUTED }));
+    totalParts.push(run(grand.wage, { size: 20, bold: true }));
+  }
+  if (show.paid) {
+    totalParts.push(run(`${totalParts.length ? '　　' : ''}累计支账 `, { size: 20, color: MUTED }));
+    totalParts.push(run(grand.paid, { size: 20, bold: true }));
+  }
+
   return (
     divider() +
     paragraph(run(`合计（${count} 个项目）`, { bold: true, size: 26, color: '1F3A2D' }), {
       after: 100,
       keepNext: true,
     }) +
-    paragraph(
-      [
-        run(`${periodWord}工资 `, { size: 20, color: MUTED }),
-        run(grand.periodWage, { size: 20, bold: true }),
-        run(`　　${periodWord}支账 `, { size: 20, color: MUTED }),
-        run(grand.periodPaid, { size: 20, bold: true }),
-      ],
-      { after: 60 }
-    ) +
-    paragraph(
-      [
-        run('项目累计工资 ', { size: 20, color: MUTED }),
-        run(grand.wage, { size: 20, bold: true }),
-        run('　　累计支账 ', { size: 20, color: MUTED }),
-        run(grand.paid, { size: 20, bold: true }),
-      ],
-      { after: 90 }
-    ) +
-    paragraph(
-      [
-        run(`${grand.balanceLabel} `, { size: 24, bold: true, color: '1F3A2D' }),
-        run(grand.balance, { size: 30, bold: true, color: grand.negative ? OT : GREEN }),
-      ],
-      { shade: BALANCE_FILL, indent: 120, before: 60, after: 140 }
-    )
+    (periodParts.length ? paragraph(periodParts, { after: 60 }) : '') +
+    (totalParts.length ? paragraph(totalParts, { after: 90 }) : '') +
+    (fields.balance !== false
+      ? paragraph(
+          [
+            run(`${grand.balanceLabel} `, { size: 24, bold: true, color: '1F3A2D' }),
+            run(grand.balance, { size: 30, bold: true, color: grand.negative ? OT : GREEN }),
+          ],
+          { shade: BALANCE_FILL, indent: 120, before: 60, after: 140 }
+        )
+      : '')
   );
 }
 
@@ -346,11 +396,11 @@ function documentXml(data) {
   sections.forEach((section, index) => {
     if (index > 0) parts.push(pageBreak());
     if (multi) parts.push(sectionHead(section));
-    parts.push(rowsTable(section.rows));
+    parts.push(rowsTable(section.rows, data.fields));
     parts.push(divider());
-    parts.push(summaryXml(section, periodWord));
+    parts.push(summaryXml(section, periodWord, data.fields));
   });
-  if (multi && data.grand) parts.push(grandXml(data.grand, sections.length, periodWord));
+  if (multi && data.grand) parts.push(grandXml(data.grand, sections.length, periodWord, data.fields));
 
   const footer = paragraph(run('由「记工」导出', { size: 15, color: '9A9A9A' }), {
     align: 'right',
