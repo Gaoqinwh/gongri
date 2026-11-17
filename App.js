@@ -1,5 +1,6 @@
 import {jsxs as _jsxs, jsx as _jsx, Fragment as _Fragment} from "react/jsx-runtime";import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildWorkDocx, saveDocx, saveFile, safeFileName } from './docx.js';
+import { buildStatementImage } from './wage-image.js';
 
 const APP_VERSION = '1.0.0';
 
@@ -164,13 +165,13 @@ function loadInitialData() {
       projects = saved.map(normalizeProject);
       migrated = true;
     }
-  } catch (e2) {}
+  } catch (e4) {}
 
   if (!migrated) {
     let legacy = {};
     try {
       legacy = JSON.parse(localStorage.getItem(RATES_KEY)) || {};
-    } catch (e3) {}
+    } catch (e5) {}
     const daily = Number(legacy.daily) > 0 ? Number(legacy.daily) : 0;
     let otHours = DEFAULT_OT_HOURS;
     // 旧版可能手填过加班时薪，换算成「几小时一个工」，金额保持不变。
@@ -206,7 +207,7 @@ function loadInitialData() {
   const savedActive = (() => {
     try {
       return localStorage.getItem(ACTIVE_KEY);
-    } catch (e4) {
+    } catch (e6) {
       return null;
     }
   })();
@@ -231,7 +232,7 @@ function applyLivingMigration(data) {
     localStorage.setItem(KEY, JSON.stringify(records));
     localStorage.setItem(LIVING_KEY, '1');
     return { ...data, records };
-  } catch (e5) {
+  } catch (e8) {
     return data;
   }
 }
@@ -246,6 +247,30 @@ const newestFirst = (a, b) => {
 
 const inRange = (date, start, end) => date >= start && date <= end;
 
+const dayShift = (text, delta) => {
+  const date = fromISO(text);
+  date.setDate(date.getDate() + delta);
+  return iso(date);
+};
+
+/// 某个项目在这个月里、指定日期之前没有记录的日子（升序）。
+function missingDays(records, projectId, monthKey, beforeISO) {
+  const [year, month] = monthKey.split('-').map(Number);
+  const total = new Date(year, month, 0).getDate();
+  const taken = new Set(
+    records
+      .filter((record) => record.projectId === projectId && record.date.slice(0, 7) === monthKey)
+      .map((record) => record.date)
+  );
+  const list = [];
+  for (let day = 1; day <= total; day += 1) {
+    const key = `${monthKey}-${pad(day)}`;
+    if (key >= beforeISO) break;
+    if (!taken.has(key)) list.push(key);
+  }
+  return list;
+}
+
 export default function App() {
   const [projects, setProjects] = useState(BOOT.projects);
   const [records, setRecords] = useState(BOOT.records);
@@ -259,6 +284,7 @@ export default function App() {
   const [editingProject, setEditingProject] = useState(null);
   const [menuProject, setMenuProject] = useState(null);
   const [exporting, setExporting] = useState(false);
+  const [batch, setBatch] = useState(null);
   const [booting, setBooting] = useState(true);
   const importRef = useRef(null);
 
@@ -275,6 +301,25 @@ export default function App() {
   }, [activeId]);
 
   const activeProject = projects.find((project) => project.id === activeId) || projects[0];
+
+  /// 在职 = 最近一条真正上工（工日 > 0）的项目，且不超过 30 天；生活费、休息、离职记录都不算。
+  const inServiceId = useMemo(() => {
+    const today = todayISO();
+    let best = null;
+    for (const project of projects) {
+      let last = null;
+      for (const record of records) {
+        if (record.projectId !== project.id) continue;
+        if ((Number(record.days) || 0) <= 0) continue;
+        if (!last || record.date > last) last = record.date;
+      }
+      if (!last) continue;
+      if (!best || last > best.date) best = { id: project.id, date: last };
+    }
+    if (!best) return null;
+    const gap = (fromISO(today) - fromISO(best.date)) / 86400000;
+    return gap <= 30 ? best.id : null;
+  }, [projects, records]);
   const rates = projectRates(activeProject);
 
   const now = new Date();
@@ -441,7 +486,7 @@ export default function App() {
       localStorage.setItem(KEY, JSON.stringify(nextRecords));
       localStorage.setItem(ACTIVE_KEY, firstId);
       location.reload();
-    } catch (e6) {
+    } catch (e9) {
       alert('这个文件不是「记工」导出的数据，换一个再试。');
     }
   };
@@ -449,7 +494,103 @@ export default function App() {
   /// 「记一笔」永远按实际时间带上今天的日期（翻到别的月份也一样）。
   const openAdd = () => setEditing({ projectId: activeProject.id, date: todayISO() });
 
-  const runExport = ({ projectIds, start, end, label }) => {
+  /// 首页「今天」的一键记工。
+
+  /// 批量补记的默认区间：优先用这个月到昨天为止的空档，没有就用最近 7 天。
+  const openBatch = () => {
+    const today = todayISO();
+    const gaps = missingDays(records, activeProject.id, monthKey, today);
+    setBatch(
+      gaps.length > 0
+        ? { start: gaps[0], end: gaps[gaps.length - 1] }
+        : { start: dayShift(today, -7), end: dayShift(today, -1) }
+    );
+  };
+
+  /// 批量补记保存：同一项目同一天只留一条。
+  const saveBatch = (list) => {
+    if (list.length > 0) {
+      const keys = new Set(list.map((record) => `${record.projectId}|${record.date}`));
+      setRecords((prev) => [
+        ...prev.filter((record) => !keys.has(`${record.projectId}|${record.date}`)),
+        ...list,
+      ]);
+      const [year, month] = list[0].date.split('-').map(Number);
+      setCursor({ y: year, m: month - 1 });
+    }
+    setBatch(null);
+  };
+
+  /// 生成当前项目、当前月份的工资单图片。
+  /// 按导出面板选的项目和时间，生成一张工资单 / 汇总图片。
+  const runImageExport = async ({ projectIds, start, end, label, fields }) => {
+    const chosen = projects.filter((project) => projectIds.includes(project.id));
+    const sections = [];
+    const totals = { days: 0, hours: 0, wage: 0, paid: 0 };
+    for (const project of chosen) {
+      const rates = projectRates(project);
+      const own = records.filter((record) => record.projectId === project.id);
+      const picked = own.filter((record) => inRange(record.date, start, end));
+      if (picked.length === 0) continue;
+      const wage = round2(
+        picked.reduce((sum, record) => sum + recordWage(record, rates.daily, rates.otHourly), 0)
+      );
+      const paid = round2(picked.reduce((sum, record) => sum + (Number(record.paid) || 0), 0));
+      const days = round2(picked.reduce((sum, record) => sum + (Number(record.days) || 0), 0));
+      const hours = round2(
+        picked.reduce((sum, record) => sum + overtimeHours(record.overtime), 0)
+      );
+      const allWage = round2(
+        own.reduce((sum, record) => sum + recordWage(record, rates.daily, rates.otHourly), 0)
+      );
+      const allPaid = round2(own.reduce((sum, record) => sum + (Number(record.paid) || 0), 0));
+      sections.push({
+        name: project.name || '未命名项目',
+        days,
+        hours,
+        wage,
+        paid,
+        allWage,
+        allPaid,
+        worked: picked.filter((record) => record.status === 'work').length,
+        rested: picked.filter((record) => record.status === 'rest' && !isPaymentOnly(record))
+          .length,
+      });
+      totals.days += days;
+      totals.hours += hours;
+      totals.wage += wage;
+      totals.paid += paid;
+    }
+    if (sections.length === 0) {
+      alert('这段时间没有记录，换一个时间或项目再导出。');
+      return false;
+    }
+    const now = new Date();
+    try {
+      const blob = await buildStatementImage({
+        title: sections.length === 1 ? sections[0].name : `${sections.length} 个项目`,
+        subtitle: label,
+        fields,
+        sections,
+        totals: {
+          days: round2(totals.days),
+          hours: round2(totals.hours),
+          wage: round2(totals.wage),
+          paid: round2(totals.paid),
+        },
+        generatedAt: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
+      });
+      const who =
+        sections.length === 1 ? safeFileName(sections[0].name) : `${sections.length}个项目`;
+      await saveFile(blob, `记工_${who}_${safeFileName(label)}.png`, 'image/png');
+      return true;
+    } catch (e11) {
+      alert('图片生成失败，请再试一次。');
+      return false;
+    }
+  };
+
+  const runExport = ({ projectIds, start, end, label, fields }) => {
     const now = new Date();
     const generatedAt =
       `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ` +
@@ -566,6 +707,7 @@ export default function App() {
       periodWord: /月$/.test(label) ? '本月' : '本期',
       generatedAt,
       iso: now.toISOString(),
+      fields,
       sections,
       grand:
         sections.length > 1
@@ -636,6 +778,8 @@ export default function App() {
 
                 project: project,
                 records: records,
+                active: project.id === inServiceId,
+                showState: true,
                 onOpen: () => openProject(project.id),
                 onMenu: () => setMenuProject(project),}, project.id
               )
@@ -705,7 +849,15 @@ export default function App() {
 
           , _jsx('section', { className: "statcard", children: 
             _jsxs('div', { className: "board-stats", children: [
-              _jsx('span', { className: "board-label", children: "本月统计"})
+              _jsxs('div', { className: "board-head", children: [
+                _jsx('span', { className: "board-label", children: "本月统计"})
+                , _jsxs('button', { type: "button", className: "board-action", onClick: openBatch, children: [
+                  _jsx('svg', { viewBox: "0 0 24 24"   , 'aria-hidden': "true", children: 
+                    _jsx('path', { d: "M8 3v3M16 3v3M4 9h16M6 5h12a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z" , fill: "none", stroke: "currentColor", strokeWidth: "1.8", strokeLinecap: "round", strokeLinejoin: "round",} )
+                  }), "补记"
+
+                ]})
+              ]})
               , _jsx('p', { className: "board-value", children: 
                 `${trim(totalDays)} 个工日 · 加班 ${trim(totalHours)} 小时`
               })
@@ -758,11 +910,13 @@ export default function App() {
             )
           ]})
 
-          , _jsxs('button', { className: "add", onClick: openAdd, children: [
-            _jsx('svg', { viewBox: "0 0 24 24"   , 'aria-hidden': "true", children: 
-              _jsx('path', { d: "M12 5v14M5 12h14"  , stroke: "currentColor", strokeWidth: "2.4", strokeLinecap: "round", fill: "none",} )
-            }), "记一笔"
+          , _jsxs('div', { className: "bottombar", children: [
+            _jsxs('button', { className: "add", onClick: openAdd, children: [
+              _jsx('svg', { viewBox: "0 0 24 24"   , 'aria-hidden': "true", children: 
+                _jsx('path', { d: "M12 5v14M5 12h14"  , stroke: "currentColor", strokeWidth: "2.4", strokeLinecap: "round", fill: "none",} )
+              }), "记一笔"
 
+            ]})
           ]})
         ]})
       )
@@ -813,7 +967,20 @@ export default function App() {
           onExport: runExport,
           onExportData: exportData,
           onImport: () => importRef.current && importRef.current.click(),
+          onExportImage: runImageExport,
           onClose: () => setExporting(false),}
+        )
+      )
+
+      , batch && (
+        _jsx(BatchSheet, {
+          projectId: activeProject.id,
+          projectName: activeProject.name,
+          defaultStart: batch.start,
+          defaultEnd: batch.end,
+          records: records,
+          onSave: saveBatch,
+          onClose: () => setBatch(null),}
         )
       )
 
@@ -977,7 +1144,7 @@ function useLongPress(onLongPress, delay = 450) {
   return { suppressed, pressProps };
 }
 
-function ProjectCard({ project, records, onOpen, onEdit, onMenu }) {
+function ProjectCard({ project, records, onOpen, onEdit, onMenu, active, showState }) {
   const { suppressed, pressProps } = useLongPress(onMenu);
 
   const rates = projectRates(project);
@@ -1017,7 +1184,11 @@ function ProjectCard({ project, records, onOpen, onEdit, onMenu }) {
         if (onOpen) onOpen();
       },
  children: [
-      _jsxs('div', { className: `project-block${project.name ? '' : ' unset'}`, children: [
+      showState && (
+        _jsx('span', { className: `project-state corner${active ? ' on' : ''}`, children: active ? '在职' : '离职'})
+      )
+
+      , _jsxs('div', { className: `project-block${project.name ? '' : ' unset'}`, children: [
         _jsx('span', { className: "name", children: project.name ? main : '设置项目名称'})
         , sub && _jsx('span', { className: "sub", children: sub})
       ]})
@@ -1492,6 +1663,7 @@ function ExportSheet({
   onExport,
   onExportData,
   onImport,
+  onExportImage,
   onClose,
 }) {
   const activeProject =
@@ -1506,6 +1678,15 @@ function ExportSheet({
   const [to, setTo] = useState('');
   const [activeEnd, setActiveEnd] = useState('from');
   const [calMonth, setCalMonth] = useState('');
+  const [format, setFormat] = useState('docx');
+  const [fields, setFields] = useState({
+    days: true,
+    overtime: true,
+    wage: true,
+    paid: true,
+    balance: true,
+    note: true,
+  });
   const [shown, setShown] = useState(false);
 
   useEffect(() => {
@@ -1671,9 +1852,18 @@ function ExportSheet({
     setPicked((list) => (list.includes(id) ? list.filter((item) => item !== id) : [...list, id]));
   };
 
+  const toggleField = (key) => setFields((prev) => ({ ...prev, [key]: !prev[key] }));
+
   const submit = () => {
     if (count === 0) return;
-    onExport({ projectIds: chosenIds, start, end, label });
+    const payload = { projectIds: chosenIds, start, end, label, fields };
+    if (format === 'image') {
+      Promise.resolve(onExportImage(payload)).then((ok) => {
+        if (ok) onClose();
+      });
+      return;
+    }
+    onExport(payload);
   };
 
   return (
@@ -1713,6 +1903,26 @@ function ExportSheet({
  children: "自选"
 
               })
+            ]})
+          ]})
+
+          , _jsxs('div', { className: "field choices-field", children: [
+            _jsx('span', { className: "field-label", children: "格式"})
+            , _jsxs('span', { className: "choices", children: [
+              _jsx('button', { type: "button", className: format === 'docx' ? 'on' : '', onClick: () => setFormat('docx'), children: "Word"})
+              , _jsx('button', { type: "button", className: format === 'image' ? 'on' : '', onClick: () => setFormat('image'), children: "图片"})
+            ]})
+          ]})
+
+          , _jsxs('div', { className: "field choices-field", children: [
+            _jsx('span', { className: "field-label", children: "内容"})
+            , _jsxs('span', { className: "choices compact", children: [
+              _jsx('button', { type: "button", className: fields.days ? 'on' : '', onClick: () => toggleField('days'), children: "工日"})
+              , _jsx('button', { type: "button", className: fields.overtime ? 'on' : '', onClick: () => toggleField('overtime'), children: "加班"})
+              , _jsx('button', { type: "button", className: fields.wage ? 'on' : '', onClick: () => toggleField('wage'), children: "工资"})
+              , _jsx('button', { type: "button", className: fields.paid ? 'on' : '', onClick: () => toggleField('paid'), children: "支账"})
+              , _jsx('button', { type: "button", className: fields.balance ? 'on' : '', onClick: () => toggleField('balance'), children: "余额"})
+              , _jsx('button', { type: "button", className: fields.note ? 'on' : '', onClick: () => toggleField('note'), children: "备注"})
             ]})
           ]})
 
@@ -1875,13 +2085,19 @@ function ExportSheet({
                   ? '勾选的项目还没有记录，换一个项目。'
                   : '这个项目还没有记录。'
                 : '这段时间没有记录，换个时间或项目。'
-            : who === 'current'
-              ? `将导出「${activeName}」${label} 的 ${count} 条记录。`
-              : who === 'all'
-                ? `将导出「${activeName}」的全部 ${count} 条记录（${spanLabel}）。`
-                : `将导出 ${withData.length} 个项目、${count} 条记录（${label}）。${
-                    withData.length > 1 ? '每个项目一节，最后带合计。' : ''
-                  }`
+            : format === 'image'
+              ? who === 'current'
+                ? `将生成「${activeName}」${label} 的工资单图片（${count} 条记录）。`
+                : who === 'all'
+                  ? `将生成「${activeName}」全部时间的工资单图片（${count} 条记录）。`
+                  : `将生成 ${withData.length} 个项目、${label} 的工资单图片（${count} 条记录）。`
+              : who === 'current'
+                ? `将导出「${activeName}」${label} 的 ${count} 条记录。`
+                : who === 'all'
+                  ? `将导出「${activeName}」的全部 ${count} 条记录（${spanLabel}）。`
+                  : `将导出 ${withData.length} 个项目、${count} 条记录（${label}）。${
+                      withData.length > 1 ? '每个项目一节，最后带合计。' : ''
+                    }`
         })
 
         , _jsxs('div', { className: "datacard", children: [
@@ -1934,3 +2150,113 @@ function ProjectMenu({ project, canDelete, onEdit, onDelete, onClose }) {
     })
   );
 }
+
+/// 首页「今天」：一眼看到今天记没记，点一下就记。
+
+/// 批量补记：选一段日期，一次填上上班或休息。
+function BatchSheet({ projectId, projectName, defaultStart, defaultEnd, records, onSave, onClose }) {
+  const [from, setFrom] = useState(defaultStart);
+  const [to, setTo] = useState(defaultEnd);
+  const [fill, setFill] = useState('work');
+  const [skip, setSkip] = useState(true);
+  const [shown, setShown] = useState(false);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  const days = useMemo(() => {
+    if (!from || !to || from > to) return [];
+    const list = [];
+    let cursor = from;
+    for (let index = 0; index < 366 && cursor <= to; index += 1) {
+      list.push(cursor);
+      cursor = dayShift(cursor, 1);
+    }
+    return list;
+  }, [from, to]);
+
+  const existing = useMemo(
+    () =>
+      new Set(
+        records.filter((record) => record.projectId === projectId).map((record) => record.date)
+      ),
+    [records, projectId]
+  );
+
+  const writable = useMemo(
+    () => (skip ? days.filter((day) => !existing.has(day)) : days),
+    [days, existing, skip]
+  );
+  const skippedCount = days.length - (skip ? writable.length : 0);
+  const valid = writable.length > 0;
+
+  const submit = (event) => {
+    event.preventDefault();
+    if (!valid) return;
+    onSave(
+      writable.map((day) => ({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${day}`,
+        projectId,
+        date: day,
+        status: fill === 'rest' ? 'rest' : 'work',
+        days: fill === 'rest' ? 0 : fill === 'half' ? 0.5 : 1,
+        note: '',
+        paid: 0,
+        overtime: null,
+      }))
+    );
+  };
+
+  return (
+    _jsx('div', { className: `sheet-backdrop${shown ? ' shown' : ''}`, onClick: onClose, children: 
+      _jsxs('form', { className: "sheet", onClick: (event) => event.stopPropagation(), onSubmit: submit, children: [
+        _jsx('div', { className: "sheet-grabber", 'aria-hidden': "true",} )
+        , _jsxs('header', { className: "sheet-bar", children: [
+          _jsx('button', { type: "button", className: "link", onClick: onClose, children: "取消"})
+          , _jsx('strong', { children: "补记"})
+          , _jsx('button', { type: "submit", className: "link strong" , disabled: !valid, children: "补记"})
+        ]})
+
+        , _jsxs('div', { className: "group", children: [
+          _jsxs('label', { className: "field", children: [
+            _jsx('span', { className: "field-label", children: "开始"})
+            , _jsx('input', { type: "date", value: from, onChange: (event) => setFrom(event.target.value),} )
+          ]})
+          , _jsxs('label', { className: "field", children: [
+            _jsx('span', { className: "field-label", children: "结束"})
+            , _jsx('input', { type: "date", value: to, onChange: (event) => setTo(event.target.value),} )
+          ]})
+          , _jsxs('div', { className: "field", children: [
+            _jsx('span', { className: "field-label", children: "默认"})
+            , _jsxs('span', { className: "choices", children: [
+              _jsx('button', { type: "button", className: fill === 'work' ? 'on' : '', onClick: () => setFill('work'), children: "上班 1 工"  })
+              , _jsx('button', { type: "button", className: fill === 'half' ? 'on' : '', onClick: () => setFill('half'), children: "半工"})
+              , _jsx('button', { type: "button", className: fill === 'rest' ? 'on' : '', onClick: () => setFill('rest'), children: "休息"})
+            ]})
+          ]})
+          , _jsxs('label', { className: "field", children: [
+            _jsx('span', { className: "field-label", children: "跳过已有"})
+            , _jsx('span', { className: "switch", children: 
+              _jsx('input', { type: "checkbox", checked: skip, onChange: (event) => setSkip(event.target.checked),} )
+            })
+          ]})
+        ]})
+
+        , _jsx('p', { className: "caption", children: 
+          from && to && from > to
+            ? '结束日期不能早于开始日期。'
+            : valid
+              ? `将补记 ${writable.length} 天：${
+                  from === to ? dayLabel(from) : `${dayLabel(from)}—${dayLabel(to)}`
+                }。${skippedCount > 0 ? `其中 ${skippedCount} 天已有记录，会跳过。` : ''}`
+              : '这段日期没有需要补记的日子。'
+        })
+      ]})
+    })
+  );
+}
+
+
+/// 首页「今天」的项目切换。
