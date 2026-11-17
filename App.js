@@ -1,4 +1,4 @@
-import {jsxs as _jsxs, Fragment as _Fragment, jsx as _jsx} from "react/jsx-runtime";import { useEffect, useMemo, useRef, useState } from 'react';
+import {jsxs as _jsxs, jsx as _jsx, Fragment as _Fragment} from "react/jsx-runtime";import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildWorkDocx, saveDocx, saveFile, safeFileName } from './docx.js';
 
 const APP_VERSION = '1.0.0';
@@ -620,6 +620,7 @@ export default function App() {
 
   return (
     _jsxs('main', { className: "page", children: [
+      _jsx('div', { className: "view", children: 
       view === 'home' ? (
         _jsxs(_Fragment, { children: [
           _jsx(HomeSummary, {
@@ -765,6 +766,7 @@ export default function App() {
           ]})
         ]})
       )
+      }, view)
 
       , editing && (
         _jsx(Editor, {
@@ -1208,7 +1210,8 @@ function Editor({ record, records, daily, otHourly, onSave, onDelete, onClose })
   return (
     _jsx('div', { className: `sheet-backdrop${shown ? ' shown' : ''}`, onClick: onClose, children: 
       _jsxs('form', { className: "sheet", onClick: (event) => event.stopPropagation(), onSubmit: submit, children: [
-        _jsxs('header', { className: "sheet-bar", children: [
+        _jsx('div', { className: "sheet-grabber", 'aria-hidden': "true",} )
+        , _jsxs('header', { className: "sheet-bar", children: [
           _jsx('button', { type: "button", className: "link", onClick: onClose, children: "取消"})
           , _jsx('strong', { children: isNew ? '记一笔' : '编辑记录'})
           , _jsx('button', { type: "submit", className: "link strong" , disabled: !valid, children: "保存"})
@@ -1405,7 +1408,8 @@ function ProjectSheet({ project, canDelete, onSave, onDelete, onClose }) {
   return (
     _jsx('div', { className: `sheet-backdrop${shown ? ' shown' : ''}`, onClick: onClose, children: 
       _jsxs('form', { className: "sheet", onClick: (event) => event.stopPropagation(), onSubmit: submit, children: [
-        _jsxs('header', { className: "sheet-bar", children: [
+        _jsx('div', { className: "sheet-grabber", 'aria-hidden': "true",} )
+        , _jsxs('header', { className: "sheet-bar", children: [
           _jsx('button', { type: "button", className: "link", onClick: onClose, children: "取消"})
           , _jsx('strong', { children: isNew ? '新建项目' : '项目设置'})
           , _jsx('button', { type: "submit", className: "link strong" , disabled: !valid, children: "保存"})
@@ -1685,7 +1689,8 @@ function ExportSheet({
   return (
     _jsx('div', { className: `sheet-backdrop${shown ? ' shown' : ''}`, onClick: onClose, children: 
       _jsxs('div', { className: "sheet", onClick: (event) => event.stopPropagation(), children: [
-        _jsxs('header', { className: "sheet-bar", children: [
+        _jsx('div', { className: "sheet-grabber", 'aria-hidden': "true",} )
+        , _jsxs('header', { className: "sheet-bar", children: [
           _jsx('button', { type: "button", className: "link", onClick: onClose, children: "取消"})
           , _jsx('strong', { children: "导出"})
           , _jsx('button', { type: "button", className: "link strong" , disabled: count === 0, onClick: submit, children: "导出"
@@ -1915,7 +1920,8 @@ function ProjectMenu({ project, canDelete, onEdit, onDelete, onClose }) {
   return (
     _jsx('div', { className: `sheet-backdrop${shown ? ' shown' : ''}`, onClick: onClose, children: 
       _jsxs('div', { className: "sheet", onClick: (event) => event.stopPropagation(), children: [
-        _jsx('p', { className: "action-title", children: project.name || '未命名项目'})
+        _jsx('div', { className: "sheet-grabber", 'aria-hidden': "true",} )
+        , _jsx('p', { className: "action-title", children: project.name || '未命名项目'})
 
         , _jsxs('div', { className: "group", children: [
           _jsx('button', { type: "button", className: "action-row", onClick: onEdit, children: "编辑项目"})
