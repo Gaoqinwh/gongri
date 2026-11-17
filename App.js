@@ -744,7 +744,7 @@ export default function App() {
                     )
                   }, record.id)
                 ))
-              })
+              }, monthKey)
             ) : (
               _jsxs('div', { className: "empty", children: [
                 _jsx('span', { className: "empty-icon", 'aria-hidden': "true", children: "📒"})
@@ -873,7 +873,7 @@ function HomeSummary({ projects, records, yearStart, yearEnd }) {
 }
 
 /// 数字变化时从当前值缓动到目标值，用来做余额的滚动动画。
-function useAnimatedNumber(target, duration = 620) {
+function useAnimatedNumber(target, duration = 820) {
   const [display, setDisplay] = useState(target);
   const current = useRef(target);
 
@@ -884,7 +884,8 @@ function useAnimatedNumber(target, duration = 620) {
     let raf = 0;
     const tick = (now) => {
       const t = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - t, 3);
+      // easeInOutCubic：起步和收尾都轻，不会一下子窜出去
+      const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
       const next = from + (target - from) * eased;
       current.current = next;
       setDisplay(next);
@@ -907,7 +908,7 @@ function Splash({ version, onDone }) {
   const [leaving, setLeaving] = useState(false);
 
   useEffect(() => {
-    const fade = setTimeout(() => setLeaving(true), 1150);
+    const fade = setTimeout(() => setLeaving(true), 1050);
     const done = setTimeout(onDone, 1500);
     return () => {
       clearTimeout(fade);
@@ -1004,17 +1005,6 @@ function ProjectCard({ project, records, onOpen, onEdit, onMenu }) {
   const targetText = moneyFmt.format(targetBalance);
   const displaySize = Math.min(60, Math.floor(535 / Math.max(targetText.length, 1)));
 
-  // 余额变化时给数字一个轻微的「弹一下」，配合滚动。
-  const [bump, setBump] = useState(false);
-  const lastTarget = useRef(targetBalance);
-  useEffect(() => {
-    if (lastTarget.current === targetBalance) return;
-    lastTarget.current = targetBalance;
-    setBump(true);
-    const timer = setTimeout(() => setBump(false), 480);
-    return () => clearTimeout(timer);
-  }, [targetBalance]);
-
   return (
     _jsxs('article', {
       className: `summary card${onOpen ? ' openable' : ''}`,
@@ -1062,7 +1052,7 @@ function ProjectCard({ project, records, onOpen, onEdit, onMenu }) {
 
       , _jsx('p', { className: "summary-label", children: balance >= 0 ? '应得工资余额' : '支账'})
       , _jsx('div', { className: "summary-number", children: 
-        _jsxs('b', { className: bump ? 'bump' : '', style: { fontSize: `min(14vw, ${displaySize}px)` }, children: [
+        _jsxs('b', { style: { fontSize: `min(14vw, ${displaySize}px)` }, children: [
           _jsx('span', { className: "cur", children: "¥"})
           , displayText
           , _jsx('span', { className: "unit", children: "元"})
