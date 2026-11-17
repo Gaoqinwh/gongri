@@ -2202,7 +2202,7 @@ function BatchSheet({ projectId, projectName, defaultStart, defaultEnd, records,
         projectId,
         date: day,
         status: fill === 'rest' ? 'rest' : 'work',
-        days: fill === 'rest' ? 0 : fill === 'half' ? 0.5 : 1,
+        days: fill === 'rest' ? 0 : 1,
         note: '',
         paid: 0,
         overtime: null,
@@ -2233,7 +2233,6 @@ function BatchSheet({ projectId, projectName, defaultStart, defaultEnd, records,
             _jsx('span', { className: "field-label", children: "默认"})
             , _jsxs('span', { className: "choices", children: [
               _jsx('button', { type: "button", className: fill === 'work' ? 'on' : '', onClick: () => setFill('work'), children: "上班"  })
-              , _jsx('button', { type: "button", className: fill === 'half' ? 'on' : '', onClick: () => setFill('half'), children: "半工"})
               , _jsx('button', { type: "button", className: fill === 'rest' ? 'on' : '', onClick: () => setFill('rest'), children: "休息"})
             ]})
           ]})
