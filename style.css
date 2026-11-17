@@ -326,6 +326,9 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
   font-size: 15px;
 }
 .row:active { background: var(--fill); }
+.rows { animation: rows-in 0.24s ease both; }
+@keyframes rows-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .rows { animation: none; } }
 
 .cell-date {
   display: flex;
@@ -1140,10 +1143,11 @@ select:focus-visible {
     radial-gradient(120% 80% at 50% -10%, rgba(255, 255, 255, 0.18), transparent 60%),
     linear-gradient(170deg, #2e6f52, #16382a);
   color: #fff;
-  transition: opacity 0.35s ease;
+  transition: opacity 0.45s ease, transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .splash.leaving {
   opacity: 0;
+  transform: scale(1.015);
   pointer-events: none;
 }
 .splash-mark {
@@ -1173,22 +1177,11 @@ select:focus-visible {
   to { opacity: 1; transform: none; }
 }
 
-/* 余额更新：数字滚动时轻轻弹一下 */
-.summary-number b.bump {
-  animation: balance-bump 0.46s ease;
-  transform-origin: 0 50%;
-}
-@keyframes balance-bump {
-  0% { transform: scale(1); }
-  38% { transform: scale(1.035); }
-  100% { transform: scale(1); }
-}
 
 @media (prefers-reduced-motion: reduce) {
   .splash-mark,
   .splash-name,
-  .splash-version,
-  .summary-number b.bump { animation: none; }
+  .splash-version { animation: none; }
 }
 
 /* ——— iOS 风格全局润色 ——— */
