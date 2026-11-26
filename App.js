@@ -1,6 +1,6 @@
 import {jsxs as _jsxs, jsx as _jsx, Fragment as _Fragment} from "react/jsx-runtime";import { useEffect, useMemo, useRef, useState } from 'react';
-import { buildWorkDocx, saveDocx, saveFile, safeFileName } from './docx.js?v=20261126-1608';
-import { buildStatementImage } from './wage-image.js?v=20261126-1608';
+import { buildWorkDocx, saveDocx, saveFile, safeFileName } from './docx.js?v=20261126-1612';
+import { buildStatementImage } from './wage-image.js?v=20261126-1612';
 
 const APP_VERSION = '1.0.0';
 
@@ -287,7 +287,6 @@ export default function App() {
   const [exporting, setExporting] = useState(false);
   const [batch, setBatch] = useState(null);
   const [booting, setBooting] = useState(true);
-  const [updateTo, setUpdateTo] = useState(null);
   const importRef = useRef(null);
 
   /// 网页版：发现线上有新构建时，提示更新（小程序里取不到 version.json，会静默跳过）。
@@ -310,7 +309,12 @@ export default function App() {
           } catch (error) {}
           return;
         }
-        if (stored !== build) setUpdateTo(build);
+        if (stored !== build) {
+          try {
+            localStorage.setItem(APP_BUILD_KEY, build);
+          } catch (error) {}
+          location.replace(`${location.pathname}?v=${encodeURIComponent(build)}`);
+        }
       } catch (error) {}
     };
     const timer = setTimeout(check, 1500);
@@ -798,24 +802,9 @@ export default function App() {
     setView('project');
   };
 
-  const applyUpdate = () => {
-    if (!updateTo) return;
-    try {
-      localStorage.setItem(APP_BUILD_KEY, updateTo);
-    } catch (error) {}
-    location.replace(`${location.pathname}?v=${encodeURIComponent(updateTo)}`);
-  };
-
   return (
     _jsxs('main', { className: "page", children: [
-      updateTo && (
-        _jsxs('div', { className: "update-bar", role: "status", children: [
-          _jsx('span', { children: "有新版本"})
-          , _jsx('button', { type: "button", onClick: applyUpdate, children: "立即更新"})
-        ]})
-      )
-
-      , _jsx('div', { className: "view", children: 
+      _jsx('div', { className: "view", children: 
       view === 'home' ? (
         _jsxs(_Fragment, { children: [
           _jsx(HomeSummary, {
