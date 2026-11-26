@@ -1,6 +1,6 @@
 import {jsxs as _jsxs, jsx as _jsx, Fragment as _Fragment} from "react/jsx-runtime";import { useEffect, useMemo, useRef, useState } from 'react';
-import { buildWorkDocx, saveDocx, saveFile, safeFileName } from './docx.js?v=20261126-1637';
-import { buildStatementImage } from './wage-image.js?v=20261126-1637';
+import { buildWorkDocx, saveDocx, saveFile, safeFileName } from './docx.js?v=20261126-164737';
+import { buildStatementImage } from './wage-image.js?v=20261126-164737';
 
 const APP_VERSION = '1.0.0';
 
@@ -288,7 +288,10 @@ export default function App() {
   const [batch, setBatch] = useState(null);
   const [booting, setBooting] = useState(() => {
     try {
-      return !sessionStorage.getItem('gongri.skipSplash.v1');
+      return (
+        !sessionStorage.getItem('gongri.skipSplash.v1') &&
+        !sessionStorage.getItem('gongri.splashShown.v1')
+      );
     } catch (error) {
       return true;
     }
@@ -347,6 +350,7 @@ export default function App() {
   useEffect(() => {
     try {
       sessionStorage.removeItem('gongri.skipSplash.v1');
+      if (booting) sessionStorage.setItem('gongri.splashShown.v1', '1');
     } catch (error) {}
   }, []);
 
@@ -584,11 +588,13 @@ export default function App() {
   const openBatch = () => {
     const today = todayISO();
     const gaps = missingDays(records, activeProject.id, monthKey, today);
-    setBatch(
-      gaps.length > 0
-        ? { start: gaps[0], end: gaps[gaps.length - 1] }
-        : { start: dayShift(today, -7), end: dayShift(today, -1) }
-    );
+    if (gaps.length > 0) {
+      const end = gaps[gaps.length - 1];
+      const start = (fromISO(end) - fromISO(gaps[0])) / 86400000 > 6 ? dayShift(end, -6) : gaps[0];
+      setBatch({ start, end });
+    } else {
+      setBatch({ start: dayShift(today, -7), end: dayShift(today, -1) });
+    }
   };
 
   /// 批量补记保存：同一项目同一天只留一条。
@@ -1414,7 +1420,7 @@ function Row({ record, daily, otHourly, onOpen }) {
       })
       , _jsx('span', { className: "cell-wage", children: yuan(recordWage(record, daily, otHourly))})
       , _jsxs('span', { className: "cell-note", children: [
-        note
+        note === '无' ? '' : note
         , isPayment && paid > 0 && _jsxs('small', { children: ["¥", amountFmt.format(paid)]})
       ]})
     ]})
@@ -1540,6 +1546,7 @@ function Editor({ record, records, daily, otHourly, onSave, onDelete, onClose })
             , _jsx('input', {
               type: "date",
               value: date,
+              max: todayISO(),
               onChange: (event) => setDate(event.target.value),
               required: true,}
             )
@@ -1562,8 +1569,8 @@ function Editor({ record, records, daily, otHourly, onSave, onDelete, onClose })
               _jsx('span', { className: "field-value", children: "0"})
             ) : (
               _jsxs('div', { className: "segmented", role: "group", 'aria-label': "工日", children: [
-                _jsx('button', { type: "button", className: days === 0.5 ? 'on' : '', onClick: () => setDays(0.5), children: "0.5"})
-                , _jsx('button', { type: "button", className: days === 1 ? 'on' : '', onClick: () => setDays(1), children: "1"})
+                _jsx('button', { type: "button", className: days === 0.5 ? 'on' : '', 'aria-pressed': days === 0.5, onClick: () => setDays(0.5), children: "0.5"})
+                , _jsx('button', { type: "button", className: days === 1 ? 'on' : '', 'aria-pressed': days === 1, onClick: () => setDays(1), children: "1"})
               ]})
             )
           ]})
@@ -2009,8 +2016,13 @@ function ExportSheet({
 
   const toggleField = (key) => setFields((prev) => ({ ...prev, [key]: !prev[key] }));
 
+  const anyField =
+    fields.days || fields.overtime || fields.wage || fields.paid || fields.balance || fields.note;
+  const imageOk = fields.days || fields.overtime || fields.wage || fields.paid || fields.balance;
+  const canExport = count > 0 && anyField && (format !== 'image' || imageOk);
+
   const submit = () => {
-    if (count === 0) return;
+    if (!canExport) return;
     const payload = { projectIds: chosenIds, start, end, label, fields };
     if (format === 'image') {
       Promise.resolve(onExportImage(payload)).then((ok) => {
@@ -2028,7 +2040,7 @@ function ExportSheet({
         , _jsxs('header', { className: "sheet-bar", children: [
           _jsx('button', { type: "button", className: "link", onClick: onClose, children: "取消"})
           , _jsx('strong', { children: "导出"})
-          , _jsx('button', { type: "button", className: "link strong" , disabled: count === 0, onClick: submit, children: "导出"
+          , _jsx('button', { type: "button", className: "link strong" , disabled: !canExport, onClick: submit, children: "导出"
 
           })
         ]})
@@ -2039,21 +2051,21 @@ function ExportSheet({
             , _jsxs('span', { className: "choices", children: [
               _jsx('button', {
                 type: "button",
-                className: who === 'current' ? 'on' : '',
+                className: who === 'current' ? 'on' : '', 'aria-pressed': who === 'current',
                 onClick: () => setWho('current'),
  children: "当前"
 
               })
               , _jsx('button', {
                 type: "button",
-                className: who === 'all' ? 'on' : '',
+                className: who === 'all' ? 'on' : '', 'aria-pressed': who === 'all',
                 onClick: () => setWho('all'),
  children: "全部"
 
               })
               , _jsx('button', {
                 type: "button",
-                className: who === 'pick' ? 'on' : '',
+                className: who === 'pick' ? 'on' : '', 'aria-pressed': who === 'pick',
                 onClick: () => setWho('pick'),
  children: "自选"
 
@@ -2064,20 +2076,20 @@ function ExportSheet({
           , _jsxs('div', { className: "field choices-field", children: [
             _jsx('span', { className: "field-label", children: "格式"})
             , _jsxs('span', { className: "choices", children: [
-              _jsx('button', { type: "button", className: format === 'docx' ? 'on' : '', onClick: () => setFormat('docx'), children: "Word"})
-              , _jsx('button', { type: "button", className: format === 'image' ? 'on' : '', onClick: () => setFormat('image'), children: "图片"})
+              _jsx('button', { type: "button", className: format === 'docx' ? 'on' : '', 'aria-pressed': format === 'docx', onClick: () => setFormat('docx'), children: "Word"})
+              , _jsx('button', { type: "button", className: format === 'image' ? 'on' : '', 'aria-pressed': format === 'image', onClick: () => setFormat('image'), children: "图片"})
             ]})
           ]})
 
           , _jsxs('div', { className: "field choices-field", children: [
             _jsx('span', { className: "field-label", children: "内容"})
             , _jsxs('span', { className: "choices compact", children: [
-              _jsx('button', { type: "button", className: fields.days ? 'on' : '', onClick: () => toggleField('days'), children: "工日"})
-              , _jsx('button', { type: "button", className: fields.overtime ? 'on' : '', onClick: () => toggleField('overtime'), children: "加班"})
-              , _jsx('button', { type: "button", className: fields.wage ? 'on' : '', onClick: () => toggleField('wage'), children: "工资"})
-              , _jsx('button', { type: "button", className: fields.paid ? 'on' : '', onClick: () => toggleField('paid'), children: "支账"})
-              , _jsx('button', { type: "button", className: fields.balance ? 'on' : '', onClick: () => toggleField('balance'), children: "余额"})
-              , _jsx('button', { type: "button", className: fields.note ? 'on' : '', onClick: () => toggleField('note'), children: "备注"})
+              _jsx('button', { type: "button", className: fields.days ? 'on' : '', 'aria-pressed': fields.days, onClick: () => toggleField('days'), children: "工日"})
+              , _jsx('button', { type: "button", className: fields.overtime ? 'on' : '', 'aria-pressed': fields.overtime, onClick: () => toggleField('overtime'), children: "加班"})
+              , _jsx('button', { type: "button", className: fields.wage ? 'on' : '', 'aria-pressed': fields.wage, onClick: () => toggleField('wage'), children: "工资"})
+              , _jsx('button', { type: "button", className: fields.paid ? 'on' : '', 'aria-pressed': fields.paid, onClick: () => toggleField('paid'), children: "支账"})
+              , _jsx('button', { type: "button", className: fields.balance ? 'on' : '', 'aria-pressed': fields.balance, onClick: () => toggleField('balance'), children: "余额"})
+              , _jsx('button', { type: "button", className: fields.note ? 'on' : '', 'aria-pressed': fields.note, onClick: () => toggleField('note'), children: "备注"})
             ]})
           ]})
 
@@ -2108,21 +2120,21 @@ function ExportSheet({
                 , _jsxs('span', { className: "choices", children: [
                   _jsx('button', {
                     type: "button",
-                    className: period === 'pick' ? 'on' : '',
+                    className: period === 'pick' ? 'on' : '', 'aria-pressed': period === 'pick',
                     onClick: () => setPeriod('pick'),
  children: "选月份"
 
                   })
                   , _jsx('button', {
                     type: "button",
-                    className: period === 'custom' ? 'on' : '',
+                    className: period === 'custom' ? 'on' : '', 'aria-pressed': period === 'custom',
                     onClick: () => setPeriod('custom'),
  children: "自定义"
 
                   })
                   , _jsx('button', {
                     type: "button",
-                    className: period === 'all' ? 'on' : '',
+                    className: period === 'all' ? 'on' : '', 'aria-pressed': period === 'all',
                     onClick: () => setPeriod('all'),
  children: "全部时间"
 
@@ -2232,7 +2244,11 @@ function ExportSheet({
         })
 
         , _jsx('p', { className: "caption", children: 
-          count === 0
+          !anyField
+            ? '先在「内容」里选一项要导出的数据。'
+            : format === 'image' && !imageOk
+              ? '图片至少要选工日、加班、工资、支账或余额里的其中一项。'
+              : count === 0
             ? who === 'pick' && picked.length === 0
               ? '先勾选要导出的项目。'
               : dateKeys.length === 0
@@ -2396,8 +2412,8 @@ function BatchSheet({ projectId, projectName, defaultStart, defaultEnd, records,
           , _jsxs('div', { className: "field", children: [
             _jsx('span', { className: "field-label", children: "默认"})
             , _jsxs('span', { className: "choices", children: [
-              _jsx('button', { type: "button", className: fill === 'work' ? 'on' : '', onClick: () => setFill('work'), children: "上班"  })
-              , _jsx('button', { type: "button", className: fill === 'rest' ? 'on' : '', onClick: () => setFill('rest'), children: "休息"})
+              _jsx('button', { type: "button", className: fill === 'work' ? 'on' : '', 'aria-pressed': fill === 'work', onClick: () => setFill('work'), children: "上班"  })
+              , _jsx('button', { type: "button", className: fill === 'rest' ? 'on' : '', 'aria-pressed': fill === 'rest', onClick: () => setFill('rest'), children: "休息"})
             ]})
           ]})
           , _jsxs('label', { className: "field", children: [
@@ -2415,13 +2431,15 @@ function BatchSheet({ projectId, projectName, defaultStart, defaultEnd, records,
               ? `将补记 ${writable.length} 天：${
                   from === to ? dayLabel(from) : `${dayLabel(from)}—${dayLabel(to)}`
                 }。${
-                  skippedCount > 0
-                    ? `其中 ${skippedCount} 天已有记录${
-                        [...paymentDays].some((day) => day >= from && day <= to)
-                          ? '或是有生活费'
-                          : ''
-                      }，会跳过。`
-                    : ''
+                  !skip && days.some((day) => existing.has(day))
+                    ? '已有记录的那几天会被覆盖（加班、备注会清掉）。'
+                    : skippedCount > 0
+                      ? `其中 ${skippedCount} 天已有记录${
+                          [...paymentDays].some((day) => day >= from && day <= to)
+                            ? '或是有生活费'
+                            : ''
+                        }，会跳过。`
+                      : ''
                 }`
               : '这段日期没有需要补记的日子。'
         })
