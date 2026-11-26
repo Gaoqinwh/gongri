@@ -1,6 +1,6 @@
 import {jsxs as _jsxs, jsx as _jsx, Fragment as _Fragment} from "react/jsx-runtime";import { useEffect, useMemo, useRef, useState } from 'react';
-import { buildWorkDocx, saveDocx, saveFile, safeFileName } from './docx.js?v=20261126-164737';
-import { buildStatementImage } from './wage-image.js?v=20261126-164737';
+import { buildWorkDocx, saveDocx, saveFile, safeFileName } from './docx.js?v=20261126-170945';
+import { buildStatementImage } from './wage-image.js?v=20261126-170945';
 
 const APP_VERSION = '1.0.0';
 
@@ -10,6 +10,7 @@ const ACTIVE_KEY = 'gongri.active.v1';
 const RATES_KEY = 'gongri.rates.v1';
 const LIVING_KEY = 'gongri.migrate.living.v1';
 const APP_BUILD_KEY = 'gongri.web.build.v1';
+const MANUAL_KEY = 'gongri.inservice.v1';
 
 const pad = (value) => String(value).padStart(2, '0');
 const iso = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -286,6 +287,21 @@ export default function App() {
   const [menuProject, setMenuProject] = useState(null);
   const [exporting, setExporting] = useState(false);
   const [batch, setBatch] = useState(null);
+  const [manualInService, setManualInService] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(MANUAL_KEY));
+      return saved && saved.id ? saved : null;
+    } catch (error) {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(MANUAL_KEY, JSON.stringify(manualInService));
+    } catch (error) {}
+  }, [manualInService]);
+
   const [booting, setBooting] = useState(() => {
     try {
       return (
@@ -400,6 +416,9 @@ export default function App() {
         if ((Number(record.days) || 0) <= 0) continue;
         if (!last || record.date > last) last = record.date;
       }
+      if (manualInService && manualInService.id === project.id && manualInService.date) {
+        if (!last || manualInService.date > last) last = manualInService.date;
+      }
       if (!last) continue;
       if (!best || last > best.date) best = { id: project.id, date: last };
     }
@@ -407,7 +426,7 @@ export default function App() {
     if (!best) return activeId;
     const gap = (fromISO(today) - fromISO(best.date)) / 86400000;
     return gap <= 30 ? best.id : null;
-  }, [projects, records]);
+  }, [projects, records, manualInService, activeId]);
   const rates = projectRates(activeProject);
 
   const now = new Date();
@@ -1030,6 +1049,13 @@ export default function App() {
         _jsx(ProjectMenu, {
           project: menuProject,
           canDelete: projectCount > 1,
+          active: menuProject.id === inServiceId,
+          onSetActive: () => {
+            const target = menuProject;
+            setManualInService({ id: target.id, date: todayISO() });
+            setActiveId(target.id);
+            setMenuProject(null);
+          },
           onEdit: () => {
             const target = menuProject;
             setMenuProject(null);
@@ -2286,7 +2312,7 @@ function ExportSheet({
   );
 }
 
-function ProjectMenu({ project, canDelete, onEdit, onDelete, onClose }) {
+function ProjectMenu({ project, canDelete, active, onSetActive, onEdit, onDelete, onClose }) {
   const [shown, setShown] = useState(false);
 
   useEffect(() => {
@@ -2301,7 +2327,8 @@ function ProjectMenu({ project, canDelete, onEdit, onDelete, onClose }) {
         , _jsx('p', { className: "action-title", children: project.name || '未命名项目'})
 
         , _jsxs('div', { className: "group", children: [
-          _jsx('button', { type: "button", className: "action-row", onClick: onEdit, children: "编辑项目"})
+          !active && _jsx('button', { type: "button", className: "action-row", onClick: onSetActive, children: "设为当前项目"})
+          , _jsx('button', { type: "button", className: "action-row", onClick: onEdit, children: "编辑项目"})
           , _jsx('button', {
             type: "button",
             className: "action-row danger" ,
