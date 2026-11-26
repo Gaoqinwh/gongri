@@ -164,7 +164,7 @@ function rowsTable(rows, fields = {}) {
               run(item.status, {
                 size: 18,
                 bold: item.status === '上班',
-                color: item.status === '上班' ? GREEN : item.status === '离职' ? OT : MUTED,
+                color: item.status === '上班' ? GREEN : item.status === '离场' ? OT : MUTED,
               }),
               { align: 'center' }
             ),
@@ -263,7 +263,7 @@ function summaryXml(section, periodWord, fields = {}) {
   const tail = [];
   if (show.overtime) tail.push(`加班 ${month.hours} 小时`);
   tail.push(`上班 ${month.worked} 天 · 休息 ${month.rested} 天`);
-  if (month.leaves > 0) tail.push(`离职 ${month.leaves} 天`);
+  if (month.leaves > 0) tail.push(`离场 ${month.leaves} 天`);
   headParts.push(run(`${show.days ? ' · ' : ''}${tail.join(' · ')}`, { size: 19, color: INK }));
 
   const moneyParts = [];
