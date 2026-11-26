@@ -1,6 +1,6 @@
 import {jsxs as _jsxs, jsx as _jsx, Fragment as _Fragment} from "react/jsx-runtime";import { useEffect, useMemo, useRef, useState } from 'react';
-import { buildWorkDocx, saveDocx, saveFile, safeFileName } from './docx.js?v=20261126-1614';
-import { buildStatementImage } from './wage-image.js?v=20261126-1614';
+import { buildWorkDocx, saveDocx, saveFile, safeFileName } from './docx.js?v=20261126-1637';
+import { buildStatementImage } from './wage-image.js?v=20261126-1637';
 
 const APP_VERSION = '1.0.0';
 
@@ -286,7 +286,13 @@ export default function App() {
   const [menuProject, setMenuProject] = useState(null);
   const [exporting, setExporting] = useState(false);
   const [batch, setBatch] = useState(null);
-  const [booting, setBooting] = useState(true);
+  const [booting, setBooting] = useState(() => {
+    try {
+      return !sessionStorage.getItem('gongri.skipSplash.v1');
+    } catch (error) {
+      return true;
+    }
+  });
   const pendingUpdate = useRef(null);
   const importRef = useRef(null);
 
@@ -318,6 +324,9 @@ export default function App() {
           if (document.querySelector('.sheet')) {
             pendingUpdate.current = build;
           } else {
+            try {
+              sessionStorage.setItem('gongri.skipSplash.v1', '1');
+            } catch (error) {}
             location.replace(`${location.pathname}?v=${encodeURIComponent(build)}`);
           }
         }
@@ -336,17 +345,38 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    try {
+      sessionStorage.removeItem('gongri.skipSplash.v1');
+    } catch (error) {}
+  }, []);
+
+  useEffect(() => {
+    try {
+      if (navigator.storage && typeof navigator.storage.persist === 'function') {
+        Promise.resolve(navigator.storage.persist()).catch(() => {});
+      }
+    } catch (error) {}
+  }, []);
+
+  useEffect(() => {
     if (!pendingUpdate.current) return;
     if (document.querySelector('.sheet')) return;
+    try {
+      sessionStorage.setItem('gongri.skipSplash.v1', '1');
+    } catch (error) {}
     location.replace(`${location.pathname}?v=${encodeURIComponent(pendingUpdate.current)}`);
   }, [editing, editingProject, menuProject, exporting, batch]);
 
   useEffect(() => {
-    localStorage.setItem(KEY, JSON.stringify(records));
+    try {
+      localStorage.setItem(KEY, JSON.stringify(records));
+    } catch (error) {}
   }, [records]);
 
   useEffect(() => {
-    localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+    try {
+      localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+    } catch (error) {}
   }, [projects]);
 
   useEffect(() => {
@@ -712,7 +742,7 @@ export default function App() {
                 : record.status === 'work'
                   ? '上班'
                   : record.status === 'leave'
-                    ? '离职'
+                    ? '离场'
                     : '休息',
             days: trim(Number(record.days) || 0),
             hours: hours > 0 ? trim(hours) : '',
@@ -1008,6 +1038,9 @@ export default function App() {
         _jsx(ProjectSheet, {
           project: editingProject.project,
           canDelete: projectCount > 1,
+          recordCount: editingProject.project
+            ? records.filter((record) => record.projectId === editingProject.project.id).length
+            : 0,
           onSave: saveProject,
           onDelete: deleteProject,
           onClose: () => setEditingProject(null),}
@@ -1252,7 +1285,7 @@ function SwipeRow({ children, onDelete, disabled }) {
 
   return (
     _jsxs('div', { className: "swipe-row", onPointerDown: down, onPointerMove: move, onPointerUp: up, onPointerCancel: up, onPointerLeave: up, onClickCapture: clickCapture, children: [
-      _jsx('button', { type: "button", className: "swipe-del", onClick: onDelete, children: [
+      _jsx('button', { type: "button", className: "swipe-del", onClick: onDelete, 'aria-hidden': dx === 0 ? "true" : undefined, tabIndex: dx === 0 ? -1 : undefined, children: [
         _jsx('span', { children: "删除"})
         , _jsx('span', { children: "删除"})
       ]})
@@ -1372,7 +1405,7 @@ function Row({ record, daily, otHourly, onOpen }) {
       _jsxs('span', { className: "cell-date", children: [date.getDate(), "日"]})
       , _jsx('span', { className: "cell-status", children: 
         _jsx('span', { className: `badge ${isWork ? 'work' : isLeave ? 'leave' : 'rest'}`, children: 
-          isWork ? '上班' : isLeave ? '离职' : '休息'
+          isWork ? '上班' : isLeave ? '离场' : isPayment && !(Number(record.days) > 0) ? '—' : '休息'
         })
       })
       , _jsx('span', { className: "cell-days", children: trim(Number(record.days) || 0)})
@@ -1450,7 +1483,7 @@ function Editor({ record, records, daily, otHourly, onSave, onDelete, onClose })
       setDays(0);
       if (note === 'am' || note === 'pm') setNote('');
     } else if (next === 'leave') {
-      // 离职当天不记工日，默认只记一笔发工资。
+      // 离场当天不记工日，默认只记一笔发工资。
       setDays(0);
       if (note !== 'wage' && note !== 'living') setNote('living');
     } else {
@@ -1518,7 +1551,7 @@ function Editor({ record, records, daily, otHourly, onSave, onDelete, onClose })
               _jsxs('select', { 'aria-label': "状态", value: status, onChange: (event) => changeStatus(event.target.value), children: [
                 _jsx('option', { value: "work", children: "上班"})
                 , _jsx('option', { value: "rest", children: "休息"})
-                , _jsx('option', { value: "leave", children: "离职"})
+                , _jsx('option', { value: "leave", children: "离场"})
               ]})
             })
           ]})
@@ -1625,7 +1658,7 @@ function Editor({ record, records, daily, otHourly, onSave, onDelete, onClose })
           , _jsx('b', { children: yuan(wage)})
         ]})
 
-        , _jsx('p', { className: "caption", children: "上午/下午上班自动记 0.5 工日；工日只能选 0.5 或 1。离职当天不记工日，只记生活费。生活费要填金额，单独算支账。"
+        , _jsx('p', { className: "caption", children: "上午/下午上班自动记 0.5 工日；工日只能选 0.5 或 1。离场当天不记工日，只记生活费。生活费要填金额，单独算支账。"
 
         })
 
@@ -1637,7 +1670,7 @@ function Editor({ record, records, daily, otHourly, onSave, onDelete, onClose })
   );
 }
 
-function ProjectSheet({ project, canDelete, onSave, onDelete, onClose }) {
+function ProjectSheet({ project, canDelete, recordCount, onSave, onDelete, onClose }) {
   const isNew = !project;
   const [name, setName] = useState(project ? project.name : '');
   const [dailyText, setDailyText] = useState(project && project.daily > 0 ? String(project.daily) : '');
@@ -1670,6 +1703,11 @@ function ProjectSheet({ project, canDelete, onSave, onDelete, onClose }) {
   const submit = (event) => {
     event.preventDefault();
     if (!valid) return;
+    if (dailyValue <= 0 && recordCount > 0) {
+      if (!confirm(`日薪是 0，保存后「${project ? project.name || '这个项目' : '这个项目'}」的工资都会算成 0。还要保存吗？`)) {
+        return;
+      }
+    }
     onSave({
       id: project ? project.id : null,
       name: name.trim(),
@@ -2302,11 +2340,21 @@ function BatchSheet({ projectId, projectName, defaultStart, defaultEnd, records,
     [records, projectId]
   );
 
-  const writable = useMemo(
-    () => (skip ? days.filter((day) => !existing.has(day)) : days),
-    [days, existing, skip]
+  // 只有收款（生活费）的那天永远不覆盖，免得不小心把金额抹掉。
+  const paymentDays = useMemo(
+    () =>
+      new Set(
+        records
+          .filter((record) => record.projectId === projectId && isPaymentOnly(record))
+          .map((record) => record.date)
+      ),
+    [records, projectId]
   );
-  const skippedCount = days.length - (skip ? writable.length : 0);
+  const writable = useMemo(
+    () => days.filter((day) => !paymentDays.has(day) && (!skip || !existing.has(day))),
+    [days, existing, skip, paymentDays]
+  );
+  const skippedCount = days.length - writable.length;
   const valid = writable.length > 0;
 
   const submit = (event) => {
@@ -2339,11 +2387,11 @@ function BatchSheet({ projectId, projectName, defaultStart, defaultEnd, records,
         , _jsxs('div', { className: "group", children: [
           _jsxs('label', { className: "field", children: [
             _jsx('span', { className: "field-label", children: "开始"})
-            , _jsx('input', { type: "date", value: from, onChange: (event) => setFrom(event.target.value),} )
+            , _jsx('input', { type: "date", value: from, max: todayISO(), onChange: (event) => setFrom(event.target.value),} )
           ]})
           , _jsxs('label', { className: "field", children: [
             _jsx('span', { className: "field-label", children: "结束"})
-            , _jsx('input', { type: "date", value: to, onChange: (event) => setTo(event.target.value),} )
+            , _jsx('input', { type: "date", value: to, max: todayISO(), onChange: (event) => setTo(event.target.value),} )
           ]})
           , _jsxs('div', { className: "field", children: [
             _jsx('span', { className: "field-label", children: "默认"})
@@ -2366,7 +2414,15 @@ function BatchSheet({ projectId, projectName, defaultStart, defaultEnd, records,
             : valid
               ? `将补记 ${writable.length} 天：${
                   from === to ? dayLabel(from) : `${dayLabel(from)}—${dayLabel(to)}`
-                }。${skippedCount > 0 ? `其中 ${skippedCount} 天已有记录，会跳过。` : ''}`
+                }。${
+                  skippedCount > 0
+                    ? `其中 ${skippedCount} 天已有记录${
+                        [...paymentDays].some((day) => day >= from && day <= to)
+                          ? '或是有生活费'
+                          : ''
+                      }，会跳过。`
+                    : ''
+                }`
               : '这段日期没有需要补记的日子。'
         })
       ]})
