@@ -1,6 +1,6 @@
 import {jsxs as _jsxs, jsx as _jsx, Fragment as _Fragment} from "react/jsx-runtime";import { useEffect, useMemo, useRef, useState } from 'react';
-import { buildWorkDocx, saveDocx, saveFile, safeFileName } from './docx.js?v=20261126-1612';
-import { buildStatementImage } from './wage-image.js?v=20261126-1612';
+import { buildWorkDocx, saveDocx, saveFile, safeFileName } from './docx.js?v=20261126-1614';
+import { buildStatementImage } from './wage-image.js?v=20261126-1614';
 
 const APP_VERSION = '1.0.0';
 
@@ -287,6 +287,7 @@ export default function App() {
   const [exporting, setExporting] = useState(false);
   const [batch, setBatch] = useState(null);
   const [booting, setBooting] = useState(true);
+  const pendingUpdate = useRef(null);
   const importRef = useRef(null);
 
   /// 网页版：发现线上有新构建时，提示更新（小程序里取不到 version.json，会静默跳过）。
@@ -313,7 +314,12 @@ export default function App() {
           try {
             localStorage.setItem(APP_BUILD_KEY, build);
           } catch (error) {}
-          location.replace(`${location.pathname}?v=${encodeURIComponent(build)}`);
+          // 正在填表/弹层时先记下来，等关掉再刷新，免得丢掉没保存的输入。
+          if (document.querySelector('.sheet')) {
+            pendingUpdate.current = build;
+          } else {
+            location.replace(`${location.pathname}?v=${encodeURIComponent(build)}`);
+          }
         }
       } catch (error) {}
     };
@@ -328,6 +334,12 @@ export default function App() {
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, []);
+
+  useEffect(() => {
+    if (!pendingUpdate.current) return;
+    if (document.querySelector('.sheet')) return;
+    location.replace(`${location.pathname}?v=${encodeURIComponent(pendingUpdate.current)}`);
+  }, [editing, editingProject, menuProject, exporting, batch]);
 
   useEffect(() => {
     localStorage.setItem(KEY, JSON.stringify(records));
