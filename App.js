@@ -1,6 +1,6 @@
 import {jsxs as _jsxs, jsx as _jsx, Fragment as _Fragment} from "react/jsx-runtime";import { useEffect, useMemo, useRef, useState } from 'react';
-import { buildWorkDocx, saveDocx, saveFile, safeFileName } from './docx.js';
-import { buildStatementImage } from './wage-image.js';
+import { buildWorkDocx, saveDocx, saveFile, safeFileName } from './docx.js?v=20261126-1608';
+import { buildStatementImage } from './wage-image.js?v=20261126-1608';
 
 const APP_VERSION = '1.0.0';
 
@@ -9,6 +9,7 @@ const PROJECTS_KEY = 'gongri.projects.v1';
 const ACTIVE_KEY = 'gongri.active.v1';
 const RATES_KEY = 'gongri.rates.v1';
 const LIVING_KEY = 'gongri.migrate.living.v1';
+const APP_BUILD_KEY = 'gongri.web.build.v1';
 
 const pad = (value) => String(value).padStart(2, '0');
 const iso = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -286,7 +287,43 @@ export default function App() {
   const [exporting, setExporting] = useState(false);
   const [batch, setBatch] = useState(null);
   const [booting, setBooting] = useState(true);
+  const [updateTo, setUpdateTo] = useState(null);
   const importRef = useRef(null);
+
+  /// 网页版：发现线上有新构建时，提示更新（小程序里取不到 version.json，会静默跳过）。
+  useEffect(() => {
+    let alive = true;
+    const check = async () => {
+      try {
+        const response = await fetch(`./version.json?t=${Date.now()}`, { cache: 'no-store' });
+        if (!response.ok) return;
+        const data = await response.json();
+        const build = String((data && data.build) || '');
+        if (!build || !alive) return;
+        let stored = '';
+        try {
+          stored = localStorage.getItem(APP_BUILD_KEY) || '';
+        } catch (error) {}
+        if (!stored) {
+          try {
+            localStorage.setItem(APP_BUILD_KEY, build);
+          } catch (error) {}
+          return;
+        }
+        if (stored !== build) setUpdateTo(build);
+      } catch (error) {}
+    };
+    const timer = setTimeout(check, 1500);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') check();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(KEY, JSON.stringify(records));
@@ -761,9 +798,24 @@ export default function App() {
     setView('project');
   };
 
+  const applyUpdate = () => {
+    if (!updateTo) return;
+    try {
+      localStorage.setItem(APP_BUILD_KEY, updateTo);
+    } catch (error) {}
+    location.replace(`${location.pathname}?v=${encodeURIComponent(updateTo)}`);
+  };
+
   return (
     _jsxs('main', { className: "page", children: [
-      _jsx('div', { className: "view", children: 
+      updateTo && (
+        _jsxs('div', { className: "update-bar", role: "status", children: [
+          _jsx('span', { children: "有新版本"})
+          , _jsx('button', { type: "button", onClick: applyUpdate, children: "立即更新"})
+        ]})
+      )
+
+      , _jsx('div', { className: "view", children: 
       view === 'home' ? (
         _jsxs(_Fragment, { children: [
           _jsx(HomeSummary, {
