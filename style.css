@@ -89,8 +89,8 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
   flex: none;
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   background: var(--surface);
   color: var(--ink);
@@ -794,7 +794,7 @@ select:focus-visible {
 }
 .choices button {
   flex: none;
-  height: 34px;
+  height: 38px;
   padding: 0 10px;
   border-radius: 8px;
   color: var(--muted);
@@ -1460,7 +1460,7 @@ select:focus-visible {
 
 /* 导出面板的「内容」多选：小一号，一行放得下 */
 .choices.compact { gap: 2px; padding: 2px; }
-.choices.compact button { height: 30px; padding: 0 5px; font-size: 12.5px; }
+.choices.compact button { height: 32px; padding: 0 5px; font-size: 12.5px; }
 
 /* 首页项目卡：左右滑动露出删除 */
 .swipe-row {
