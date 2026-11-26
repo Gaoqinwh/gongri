@@ -1461,3 +1461,30 @@ select:focus-visible {
 /* 导出面板的「内容」多选：小一号，一行放得下 */
 .choices.compact { gap: 2px; padding: 2px; }
 .choices.compact button { height: 30px; padding: 0 5px; font-size: 12.5px; }
+
+/* 首页项目卡：左右滑动露出删除 */
+.swipe-row {
+  position: relative;
+  border-radius: 26px;
+  overflow: hidden;
+  touch-action: pan-y;
+}
+.swipe-content {
+  position: relative;
+  z-index: 1;
+  transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.swipe-content.dragging { transition: none; }
+.swipe-del {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 26px;
+  background: #c2453f;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+}
