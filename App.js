@@ -775,14 +775,16 @@ export default function App() {
 
           , _jsxs('div', { className: "cards", children: [
             projects.map((project) => (
-              _jsx(ProjectCard, {
-
-                project: project,
-                records: records,
-                active: project.id === inServiceId,
-                showState: true,
-                onOpen: () => openProject(project.id),
-                onMenu: () => setMenuProject(project),}, project.id
+              _jsx(SwipeRow, {
+                onDelete: () => askDeleteProject(project),
+                disabled: projects.length <= 1,
+                children: _jsx(ProjectCard, {
+                  project: project,
+                  records: records,
+                  active: project.id === inServiceId,
+                  showState: true,
+                  onOpen: () => openProject(project.id),
+                  onMenu: () => setMenuProject(project),})}, project.id
               )
             ))
 
@@ -1143,6 +1145,67 @@ function useLongPress(onLongPress, delay = 450) {
   };
 
   return { suppressed, pressProps };
+}
+
+/// 首页项目卡：左右滑动露出删除。
+function SwipeRow({ children, onDelete, disabled }) {
+  const [dx, setDx] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const start = useRef(null);
+  const moved = useRef(false);
+  const opened = useRef(0);
+
+  const down = (event) => {
+    if (disabled) return;
+    if (event.target.closest('button')) return;
+    start.current = { x: event.clientX, y: event.clientY, base: opened.current * 92 };
+    moved.current = false;
+  };
+  const move = (event) => {
+    if (!start.current) return;
+    const mx = event.clientX - start.current.x;
+    const my = event.clientY - start.current.y;
+    if (!moved.current) {
+      if (Math.abs(mx) < 12 || Math.abs(mx) < Math.abs(my)) return;
+      moved.current = true;
+      setDragging(true);
+    }
+    setDx(Math.max(-120, Math.min(120, start.current.base + mx)));
+  };
+  const up = () => {
+    if (!start.current) return;
+    start.current = null;
+    if (!moved.current) return;
+    const next = dx > 56 ? 1 : dx < -56 ? -1 : 0;
+    opened.current = next;
+    setDx(next * 92);
+    setDragging(false);
+  };
+  const clickCapture = (event) => {
+    if (event.target.closest('.swipe-del')) return;
+    if (moved.current) {
+      event.stopPropagation();
+      event.preventDefault();
+      moved.current = false;
+      return;
+    }
+    if (opened.current !== 0) {
+      event.stopPropagation();
+      event.preventDefault();
+      opened.current = 0;
+      setDx(0);
+    }
+  };
+
+  return (
+    _jsxs('div', { className: "swipe-row", onPointerDown: down, onPointerMove: move, onPointerUp: up, onPointerCancel: up, onPointerLeave: up, onClickCapture: clickCapture, children: [
+      _jsx('button', { type: "button", className: "swipe-del", onClick: onDelete, children: [
+        _jsx('span', { children: "删除"})
+        , _jsx('span', { children: "删除"})
+      ]})
+      , _jsx('div', { className: `swipe-content${dragging ? ' dragging' : ''}`, style: { transform: `translateX(${dx}px)` }, children: children })
+    ]})
+  );
 }
 
 function ProjectCard({ project, records, onOpen, onEdit, onMenu, active, showState }) {
